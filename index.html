@@ -3,103 +3,41 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pixelate — 画像をそのままのサイズでドット絵風に</title>
+  <title>Pixelate</title>
   <style>
-    :root{--bg:#0f1724;--card:#0b1220;--accent:#60a5fa;--muted:#9aa6b2;--glass:rgba(255,255,255,0.03)}
-    html,body{height:100%}
-    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,"Hiragino Kaku Gothic ProN",Meiryo, sans-serif;background:linear-gradient(180deg,#071124 0%,#08121a 100%);color:#e6eef6;display:flex;align-items:center;justify-content:center;padding:28px}
-    .app{width:980px;max-width:98%;display:grid;grid-template-columns:360px 1fr;gap:18px}
-    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:18px;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,0.6);}
-    h1{margin:0 0 8px;font-size:18px}
-    p.small{margin:6px 0 12px;color:var(--muted);font-size:13px}
-    label{display:block;font-size:13px;margin-top:10px;color:var(--muted)}
-    input[type=range]{width:100%}
-    .controls{display:flex;flex-direction:column}
-    .btn{display:inline-block;padding:8px 10px;border-radius:8px;background:var(--accent);color:#04283a;text-decoration:none;font-weight:600;border:none;cursor:pointer}
-    .muted{color:var(--muted);font-size:13px}
-    #canvasWrap{background:var(--card);display:flex;align-items:center;justify-content:center;border-radius:10px;padding:12px}
-    canvas{image-rendering:pixelated;max-width:100%;height:auto;border-radius:6px;background:transparent}
-    .row{display:flex;gap:8px;align-items:center}
-    .flex{display:flex;gap:8px}
-    .small-input{width:100%}
-    .drop{border-radius:8px;padding:10px;border:2px dashed rgba(255,255,255,0.04);text-align:center;color:var(--muted);cursor:pointer}
-    .foot{font-size:12px;color:var(--muted);margin-top:10px}
-    .tog{display:inline-flex;align-items:center;gap:8px}
-    .link{color:var(--accent);text-decoration:none}
+    body{margin:0;padding:20px;background:#111;color:#eee;font-family:sans-serif}
+    #controls{margin-bottom:10px}
+    canvas{image-rendering:pixelated;max-width:100%;height:auto;background:#222}
   </style>
 </head>
 <body>
-  <div class="app">
-    <div class="card">
-      <h1>Pixelate — 画像をドット絵風に（元サイズ保持）</h1>
-      <p class="small">画像をアップロードして、横ブロック数（n）やポスタライズ量、グリッドのオン／オフを変えられます。画像サイズは変わりません。</p>
-
-      <div class="controls">
-        <label>画像を選択またはドラッグ＆ドロップ</label>
-        <div id="drop" class="drop">ファイルをここにドロップ、またはクリックして選択</div>
-        <input id="file" type="file" accept="image/*" style="display:none">
-
-        <label>横ブロック数（n）: <span id="nLabel">32</span></label>
-        <input id="nRange" type="range" min="2" max="1024" value="32">
-
-        <label>ポスタライズ（色数を粗く）: <span id="postLabel">64</span></label>
-        <input id="postRange" type="range" min="2" max="256" value="64">
-
-        <label class="tog"><input id="gridToggle" type="checkbox"> グリッド表示</label>
-
-        <label class="tog"><input id="keepSize" type="checkbox" checked> 元サイズを保持（ONなら元の寸法で出力）</label>
-
-        <div style="display:flex;gap:8px;margin-top:10px">
-          <button id="applyBtn" class="btn">適用</button>
-          <button id="downloadBtn" class="btn" style="background:#22c55e">ダウンロード</button>
-          <button id="resetBtn" class="btn" style="background:#ef4444">リセット</button>
-        </div>
-
-        <div class="foot">出力は <strong>PNG</strong> 推奨。GitHub に上げる準備もできます — README や MIT ライセンスを付けたい場合は教えてください。</div>
-      </div>
-    </div>
-
-    <div class="card" id="previewCard">
-      <div id="canvasWrap">
-        <canvas id="canvas" width="640" height="360'></canvas>
-      </div>
-      <p class="muted" id="info">画像が読み込まれていません。</p>
-    </div>
+  <div id="controls">
+    <input id="file" type="file" accept="image/*">
+    <label>横ブロック数: <span id="nLabel">32</span></label>
+    <input id="nRange" type="range" min="2" max="512" value="32">
+    <button id="applyBtn">適用</button>
+    <button id="downloadBtn">ダウンロード</button>
   </div>
-
+  <canvas id="canvas"></canvas>
 <script>
 (() => {
   const fileEl = document.getElementById('file');
-  const drop = document.getElementById('drop');
   const nRange = document.getElementById('nRange');
   const nLabel = document.getElementById('nLabel');
-  const postRange = document.getElementById('postRange');
-  const postLabel = document.getElementById('postLabel');
   const applyBtn = document.getElementById('applyBtn');
   const downloadBtn = document.getElementById('downloadBtn');
-  const resetBtn = document.getElementById('resetBtn');
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d');
-  const info = document.getElementById('info');
-  const gridToggle = document.getElementById('gridToggle');
-  const keepSize = document.getElementById('keepSize');
 
   let img = new Image();
   let imgLoaded = false;
-  let originalW = 640, originalH = 360;
+  let originalW = 0, originalH = 0;
 
-  function updateLabels(){ nLabel.textContent = nRange.value; postLabel.textContent = postRange.value }
-  updateLabels();
+  nRange.addEventListener('input', () => nLabel.textContent = nRange.value);
 
-  // drag & drop
-  drop.addEventListener('click', () => fileEl.click());
-  drop.addEventListener('dragover', e => { e.preventDefault(); drop.style.borderColor = '#2b6cff' })
-  drop.addEventListener('dragleave', e => { drop.style.borderColor = '' })
-  drop.addEventListener('drop', e => {
-    e.preventDefault(); drop.style.borderColor = '';
-    const f = e.dataTransfer.files[0]; if(f) handleFile(f);
+  fileEl.addEventListener('change', e => {
+    if(e.target.files[0]) handleFile(e.target.files[0]);
   });
-  fileEl.addEventListener('change', e => { if(e.target.files[0]) handleFile(e.target.files[0]); })
 
   function handleFile(file){
     const reader = new FileReader();
@@ -111,7 +49,6 @@
         canvas.width = originalW; canvas.height = originalH;
         ctx.clearRect(0,0,canvas.width,canvas.height);
         ctx.drawImage(img,0,0);
-        info.textContent = `読み込み: ${file.name} — ${originalW}×${originalH}px`;
       };
       img.src = ev.target.result;
     };
@@ -119,59 +56,25 @@
   }
 
   function applyPixelate(){
-    if(!imgLoaded){ alert('まず画像を読み込んでください'); return }
+    if(!imgLoaded){ return }
     const n = Math.max(2, parseInt(nRange.value,10));
-    const post = Math.max(2, parseInt(postRange.value,10));
 
     const srcW = originalW, srcH = originalH;
-
-    // 1) 作業用キャンバス: 小さいサイズに縮小
     const tmpSmall = document.createElement('canvas');
-    // maintain aspect: make width = n, height proportional
     const smallW = n;
     const smallH = Math.max(1, Math.round(n * srcH / srcW));
     tmpSmall.width = smallW; tmpSmall.height = smallH;
     const tmpCtx = tmpSmall.getContext('2d');
-    tmpCtx.imageSmoothingEnabled = true; // for downscale use smoothing
+    tmpCtx.imageSmoothingEnabled = true;
     tmpCtx.drawImage(img, 0, 0, smallW, smallH);
 
-    // 2) optional: posterize / color quantization (simple per-channel quantize)
-    let smallData = tmpCtx.getImageData(0,0,smallW,smallH);
-    const d = smallData.data;
-    // posterize: reduce channels to 'post' levels
-    const levels = post;
-    for(let i=0;i<d.length;i+=4){
-      d[i] = Math.round(d[i] * (levels-1) / 255) * (255/(levels-1));
-      d[i+1] = Math.round(d[i+1] * (levels-1) / 255) * (255/(levels-1));
-      d[i+2] = Math.round(d[i+2] * (levels-1) / 255) * (255/(levels-1));
-      // keep alpha as is
-    }
-    tmpCtx.putImageData(smallData,0,0);
-
-    // 3) 元のサイズへ最近傍で拡大
-    // draw to main canvas with imageSmoothingEnabled=false
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.drawImage(tmpSmall, 0, 0, srcW, srcH);
-
-    // 4) optional grid
-    if(gridToggle.checked){
-      ctx.save();
-      ctx.lineWidth = Math.max(1, Math.floor(Math.max(srcW,srcH)/200));
-      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-      const cellW = Math.round(srcW / smallW);
-      const cellH = Math.round(srcH / smallH);
-      // vertical
-      for(let x=0;x<=srcW; x+=cellW){ ctx.beginPath(); ctx.moveTo(x+0.5,0); ctx.lineTo(x+0.5,srcH); ctx.stroke(); }
-      for(let y=0;y<=srcH; y+=cellH){ ctx.beginPath(); ctx.moveTo(0,y+0.5); ctx.lineTo(srcW,y+0.5); ctx.stroke(); }
-      ctx.restore();
-    }
-
-    info.textContent = `適用済 — ブロック: ${smallW}×${smallH}、ポスタライズ: ${post}`;
   }
 
   function download(){
-    if(!imgLoaded){ alert('まず画像を読み込んでください'); return }
+    if(!imgLoaded){ return }
     const a = document.createElement('a');
     a.href = canvas.toDataURL('image/png');
     a.download = 'pixelated.png';
@@ -180,19 +83,6 @@
 
   applyBtn.addEventListener('click', applyPixelate);
   downloadBtn.addEventListener('click', download);
-  resetBtn.addEventListener('click', ()=>{
-    if(!imgLoaded) return; ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(img,0,0); info.textContent = `リセット: ${originalW}×${originalH}`;
-  });
-
-  nRange.addEventListener('input', updateLabels);
-  postRange.addEventListener('input', updateLabels);
-
-  // keyboard shortcuts: A apply, D download
-  document.addEventListener('keydown', e=>{
-    if(e.key === 'a') applyPixelate();
-    if(e.key === 'd') download();
-  });
-
 })();
 </script>
 </body>
